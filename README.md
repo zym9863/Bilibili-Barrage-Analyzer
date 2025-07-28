@@ -1,5 +1,7 @@
 # 📺 Bilibili弹幕分析器
 
+[English Version (README_EN.md)](README_EN.md)
+
 一个功能强大的Bilibili弹幕数据分析工具，支持弹幕获取、数据分析和可视化展示。
 
 ## ✨ 功能特性
