@@ -62,7 +62,7 @@ def main():
             )
 
             keyword_count = st.slider("关键词数量", 10, 100, 30, help="显示的热门关键词数量")
-            time_interval = st.slider("时间间隔 (秒)", 30, 300, 60, help="时间分布分析的时间间隔")
+            time_interval = st.slider("时间间隔 (秒)", 10, 100, 60, help="时间分布分析的时间间隔")
 
     # 主内容区域
     if video_input:
@@ -159,7 +159,7 @@ def analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, ke
         status_text.text("🔍 正在分析弹幕数据...")
 
         analyzer = DanmakuAnalyzer()
-        analysis_result = analyzer.generate_summary_report(danmaku_data)
+        analysis_result = analyzer.generate_summary_report(danmaku_data, time_interval)
 
         progress_bar.progress(80)
 

@@ -223,12 +223,13 @@ class DanmakuAnalyzer:
         
         return hot_moments
     
-    def generate_summary_report(self, danmaku_data: List[Dict]) -> Dict:
+    def generate_summary_report(self, danmaku_data: List[Dict], time_interval: int = 60) -> Dict:
         """
         生成弹幕分析总结报告
         
         Args:
             danmaku_data: 弹幕数据列表
+            time_interval: 时间分布分析的时间间隔（秒），默认60秒
             
         Returns:
             Dict: 分析报告
@@ -252,7 +253,7 @@ class DanmakuAnalyzer:
         length_stats = self.analyze_length_distribution(texts)
         
         # 时间分布
-        time_dist = self.analyze_time_distribution(danmaku_data)
+        time_dist = self.analyze_time_distribution(danmaku_data, time_interval)
         
         # 热点时刻
         hot_moments = self.find_hot_moments(danmaku_data)
