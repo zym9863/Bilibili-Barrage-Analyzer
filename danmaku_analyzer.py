@@ -19,9 +19,8 @@ class DanmakuAnalyzer:
     """弹幕数据分析器"""
     
     def __init__(self):
-        # 设置中文字体
-        plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
-        plt.rcParams['axes.unicode_minus'] = False
+        # 动态设置中文字体
+        self._setup_chinese_fonts()
         
         # 停用词列表
         self.stop_words = {
@@ -36,6 +35,39 @@ class DanmakuAnalyzer:
         self.negative_words = {
             '差', '烂', '垃圾', '糟糕', '失望', '无聊', '难看', '丑', '讨厌', '恶心', '恶心', '烦', '气', '怒', '愤怒', '生气', '郁闷', '沮丧', '难过', '伤心', '痛苦', '绝望', '崩溃', '抑郁', '焦虑', '害怕', '恐惧', '担心', '紧张', '尴尬', '羞耻', '后悔', '遗憾', '可惜', '浪费', '白费', '没用', '无用', '废物', '智障', '脑残', '傻', '蠢', '笨', '白痴', '弱智', '低能', '菜', '辣鸡', '拉胯', '翻车', '凉了', '完了', '死了', '毁了', '坏了', '错了', '假的', '骗人', '骗子', '黑', '喷', '骂', '滚', '滚蛋', '去死', '闭嘴'
         }
+    
+    def _setup_chinese_fonts(self):
+        """设置中文字体"""
+        import os
+        
+        # 尝试不同的中文字体路径
+        font_paths = [
+            'fonts/NotoSansSC-Regular.ttf',  # 项目内置字体（优先使用）
+            'C:/Windows/Fonts/simhei.ttf',  # Windows 黑体
+            'C:/Windows/Fonts/simsun.ttc',  # Windows 宋体
+            'C:/Windows/Fonts/msyh.ttc',    # Windows 微软雅黑
+            '/System/Library/Fonts/PingFang.ttc',  # macOS
+            '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',  # Linux
+        ]
+        
+        # 检查字体文件是否存在，并设置matplotlib参数
+        font_found = False
+        for font_path in font_paths:
+            if os.path.exists(font_path):
+                try:
+                    from matplotlib import font_manager
+                    font_prop = font_manager.FontProperties(fname=font_path)
+                    plt.rcParams['font.family'] = font_prop.get_name()
+                    font_found = True
+                    break
+                except:
+                    continue
+        
+        # 如果没有找到字体文件，使用系统默认字体名称
+        if not font_found:
+            plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'DejaVu Sans']
+        
+        plt.rcParams['axes.unicode_minus'] = False
     
     def clean_text(self, text: str) -> str:
         """

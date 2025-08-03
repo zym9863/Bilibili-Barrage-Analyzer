@@ -61,6 +61,7 @@ class DanmakuVisualizer:
         
         # 尝试不同的中文字体路径
         font_paths = [
+            'fonts/NotoSansSC-Regular.ttf',  # 项目内置字体（优先使用）
             'C:/Windows/Fonts/simhei.ttf',  # Windows 黑体
             'C:/Windows/Fonts/simsun.ttc',  # Windows 宋体
             'C:/Windows/Fonts/msyh.ttc',    # Windows 微软雅黑
