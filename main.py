@@ -221,33 +221,39 @@ def display_analysis_results(analysis_result, figures, danmaku_data):
         st.subheader("📊 数据可视化")
 
         # 创建标签页
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["😊 情感分析", "🔤 热门关键词", "⏰ 时间分布", "📏 长度分布", "🔥 热点时刻"])
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["☁️ 词云图", "😊 情感分析", "🔤 热门关键词", "⏰ 时间分布", "📏 长度分布", "🔥 热点时刻"])
 
         with tab1:
+            if 'wordcloud' in figures:
+                st.plotly_chart(figures['wordcloud'], use_container_width=True)
+            else:
+                st.info("暂无词云数据")
+
+        with tab2:
             if 'sentiment' in figures:
                 st.plotly_chart(figures['sentiment'], use_container_width=True)
             else:
                 st.info("暂无情感分析数据")
 
-        with tab2:
+        with tab3:
             if 'keywords' in figures:
                 st.plotly_chart(figures['keywords'], use_container_width=True)
             else:
                 st.info("暂无关键词数据")
 
-        with tab3:
+        with tab4:
             if 'time_distribution' in figures:
                 st.plotly_chart(figures['time_distribution'], use_container_width=True)
             else:
                 st.info("暂无时间分布数据")
 
-        with tab4:
+        with tab5:
             if 'length_distribution' in figures:
                 st.plotly_chart(figures['length_distribution'], use_container_width=True)
             else:
                 st.info("暂无长度分布数据")
 
-        with tab5:
+        with tab6:
             if 'hot_moments' in figures:
                 st.plotly_chart(figures['hot_moments'], use_container_width=True)
             else:

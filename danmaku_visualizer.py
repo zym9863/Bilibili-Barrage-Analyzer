@@ -59,19 +59,59 @@ class DanmakuVisualizer:
         # 构建词频字典
         word_freq = dict(keywords)
         
-        # 创建词云
-        wordcloud = WordCloud(
-            width=width,
-            height=height,
-            background_color='white',
-            font_path='simhei.ttf',  # 中文字体路径，可能需要调整
-            max_words=100,
-            colormap='viridis',
-            relative_scaling=0.5,
-            random_state=42
-        ).generate_from_frequencies(word_freq)
+        # 尝试不同的中文字体路径
+        font_paths = [
+            'C:/Windows/Fonts/simhei.ttf',  # Windows 黑体
+            'C:/Windows/Fonts/simsun.ttc',  # Windows 宋体
+            'C:/Windows/Fonts/msyh.ttc',    # Windows 微软雅黑
+            '/System/Library/Fonts/PingFang.ttc',  # macOS
+            '/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf',  # Linux
+        ]
         
-        return wordcloud
+        font_path = None
+        for path in font_paths:
+            try:
+                import os
+                if os.path.exists(path):
+                    font_path = path
+                    break
+            except:
+                continue
+        
+        # 创建词云参数
+        wordcloud_params = {
+            'width': width,
+            'height': height,
+            'background_color': 'white',
+            'max_words': 100,
+            'colormap': 'Set3',  # 使用更柔和的颜色
+            'relative_scaling': 0.5,
+            'random_state': 42,
+            'collocations': False,  # 避免重复词组
+            'margin': 10,
+            'min_font_size': 10,
+            'max_font_size': 80
+        }
+        
+        # 如果找到字体，添加字体路径
+        if font_path:
+            wordcloud_params['font_path'] = font_path
+        
+        try:
+            wordcloud = WordCloud(**wordcloud_params).generate_from_frequencies(word_freq)
+            return wordcloud
+        except Exception as e:
+            print(f"词云生成失败: {e}")
+            # 如果使用字体失败，尝试不使用字体
+            if 'font_path' in wordcloud_params:
+                del wordcloud_params['font_path']
+                try:
+                    wordcloud = WordCloud(**wordcloud_params).generate_from_frequencies(word_freq)
+                    return wordcloud
+                except Exception as e2:
+                    print(f"无字体词云生成也失败: {e2}")
+                    return None
+            return None
     
     def plot_wordcloud_matplotlib(self, keywords: List[Tuple[str, int]]) -> plt.Figure:
         """
@@ -99,6 +139,131 @@ class DanmakuVisualizer:
         ax.set_title('弹幕词云图', fontsize=16, fontweight='bold', pad=20)
         
         plt.tight_layout()
+        return fig
+    
+    def plot_wordcloud_plotly(self, keywords: List[Tuple[str, int]]) -> go.Figure:
+        """
+        使用Plotly绘制词云图（基于散点图的简化版本）
+        
+        Args:
+            keywords: 关键词和频次列表
+            
+        Returns:
+            go.Figure: Plotly图形对象
+        """
+        if not keywords:
+            # 创建空图表
+            fig = go.Figure()
+            fig.add_annotation(
+                text="没有足够的数据生成词云",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5,
+                showarrow=False,
+                font=dict(size=16, color='#666666')
+            )
+            fig.update_layout(
+                title=dict(
+                    text="🔤 弹幕词云图",
+                    x=0.5,
+                    font=dict(size=20, color='#2E86C1')
+                ),
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                height=500
+            )
+            return fig
+        
+        # 取前30个关键词
+        keywords = keywords[:30]
+        
+        # 使用matplotlib生成词云图像，然后转换为base64
+        import matplotlib.pyplot as plt
+        from matplotlib.figure import Figure
+        import io
+        import base64
+        
+        # 生成词云
+        wordcloud = self.create_wordcloud(keywords, width=800, height=400)
+        
+        if wordcloud is None:
+            # 创建空图表
+            fig = go.Figure()
+            fig.add_annotation(
+                text="无法生成词云",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5,
+                showarrow=False,
+                font=dict(size=16, color='#666666')
+            )
+            fig.update_layout(
+                title=dict(
+                    text="🔤 弹幕词云图",
+                    x=0.5,
+                    font=dict(size=20, color='#2E86C1')
+                ),
+                xaxis=dict(visible=False),
+                yaxis=dict(visible=False),
+                plot_bgcolor='white',
+                paper_bgcolor='white',
+                height=500
+            )
+            return fig
+        
+        # 创建matplotlib图形
+        fig_mpl = Figure(figsize=(10, 6))
+        ax = fig_mpl.add_subplot(111)
+        ax.imshow(wordcloud, interpolation='bilinear')
+        ax.axis('off')
+        
+        # 转换为base64图像
+        img_buffer = io.BytesIO()
+        fig_mpl.savefig(img_buffer, format='png', bbox_inches='tight', 
+                       facecolor='white', edgecolor='none', dpi=100)
+        img_buffer.seek(0)
+        img_b64 = base64.b64encode(img_buffer.read()).decode()
+        
+        # 创建Plotly图表显示图像
+        fig = go.Figure()
+        
+        # 添加图像
+        fig.add_layout_image(
+            dict(
+                source=f"data:image/png;base64,{img_b64}",
+                xref="paper",
+                yref="paper",
+                x=0,
+                y=1,
+                sizex=1,
+                sizey=1,
+                sizing="stretch",
+                opacity=1,
+                layer="below"
+            )
+        )
+        
+        # 更新布局
+        fig.update_layout(
+            title=dict(
+                text="🔤 弹幕词云图",
+                x=0.5,
+                font=dict(size=20, color='#2E86C1')
+            ),
+            xaxis=dict(
+                visible=False,
+                range=[0, 1]
+            ),
+            yaxis=dict(
+                visible=False,
+                range=[0, 1]
+            ),
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            margin=dict(l=20, r=20, t=60, b=20),
+            height=500
+        )
+        
         return fig
     
     def plot_sentiment_pie(self, sentiment_data: Dict[str, float]) -> go.Figure:
@@ -393,6 +558,10 @@ class DanmakuVisualizer:
             Dict[str, go.Figure]: 包含所有图表的字典
         """
         figures = {}
+        
+        # 词云图
+        if 'keywords' in analysis_result:
+            figures['wordcloud'] = self.plot_wordcloud_plotly(analysis_result['keywords'])
         
         # 情感分析饼图
         if 'sentiment' in analysis_result:
