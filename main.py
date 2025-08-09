@@ -13,6 +13,7 @@ import traceback
 from danmaku_fetcher import DanmakuFetcher, fetch_danmaku, fetch_video_info
 from danmaku_analyzer import DanmakuAnalyzer, analyze_danmaku
 from danmaku_visualizer import DanmakuVisualizer, create_visualizations
+from danmaku_ai_analyzer import DanmakuAIAnalyzer, analyze_danmaku_with_ai
 
 
 def main():
@@ -34,6 +35,7 @@ def main():
     - 📊 **数据分析**: 词频统计、情感分析、时间分布分析
     - 📈 **可视化**: 词云图、时间分布图、情感分析图等
     - 🔍 **热点发现**: 自动识别弹幕热点时刻
+    - 🤖 **AI智能分析**: 使用AI深度分析弹幕内容和观众反应
     """)
 
     # 侧边栏
@@ -52,6 +54,13 @@ def main():
         st.subheader("🔧 分析选项")
         use_protobuf = st.checkbox("使用Protobuf接口", value=True, help="推荐使用，数据更完整")
         page_number = st.number_input("分P号", min_value=0, value=0, help="多P视频的分集号，从0开始")
+
+        # AI分析选项
+        st.subheader("🤖 AI分析")
+        enable_ai_analysis = st.checkbox("启用AI智能分析", value=False, help="使用AI进行深度内容分析（需要网络连接）")
+        
+        if enable_ai_analysis:
+            st.info("🔍 AI分析将提供情感分析、主题识别、热点解读和综合报告")
 
         # 高级选项
         with st.expander("🔬 高级选项"):
@@ -94,7 +103,7 @@ def main():
 
                     # 开始分析按钮
                     if st.button("🚀 开始分析弹幕", type="primary", use_container_width=True):
-                        analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, keyword_count, time_interval)
+                        analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, keyword_count, time_interval, enable_ai_analysis)
 
                 else:
                     st.error("❌ 无法获取视频信息，请检查URL或BV号是否正确")
@@ -127,10 +136,11 @@ def main():
             - 😊 情感倾向分析
             - ⏰ 弹幕时间分布
             - 🔥 热点时刻识别
+            - 🤖 AI智能内容分析
             """)
 
 
-def analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, keyword_count, time_interval):
+def analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, keyword_count, time_interval, enable_ai_analysis=False):
     """分析弹幕数据"""
 
     # 创建进度条
@@ -153,7 +163,7 @@ def analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, ke
             st.error("❌ 未获取到弹幕数据，可能是视频没有弹幕或网络问题")
             return
 
-        progress_bar.progress(50)
+        progress_bar.progress(40)
 
         # 步骤2: 分析数据
         status_text.text("🔍 正在分析弹幕数据...")
@@ -161,9 +171,24 @@ def analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, ke
         analyzer = DanmakuAnalyzer()
         analysis_result = analyzer.generate_summary_report(danmaku_data, time_interval)
 
-        progress_bar.progress(80)
+        progress_bar.progress(60)
 
-        # 步骤3: 生成可视化
+        # 步骤3: AI分析（如果启用）
+        ai_results = None
+        if enable_ai_analysis:
+            status_text.text("🤖 正在进行AI智能分析...")
+            try:
+                danmaku_texts = [item['text'] for item in danmaku_data if item.get('text')]
+                ai_results = analyze_danmaku_with_ai(analysis_result, danmaku_texts)
+                progress_bar.progress(80)
+            except Exception as e:
+                st.warning(f"⚠️ AI分析失败: {str(e)}")
+                ai_results = None
+                progress_bar.progress(80)
+        else:
+            progress_bar.progress(80)
+
+        # 步骤4: 生成可视化
         status_text.text("📊 正在生成可视化图表...")
 
         visualizer = DanmakuVisualizer()
@@ -177,7 +202,7 @@ def analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, ke
         status_text.empty()
 
         # 显示分析结果
-        display_analysis_results(analysis_result, figures, danmaku_data)
+        display_analysis_results(analysis_result, figures, danmaku_data, ai_results)
 
     except Exception as e:
         progress_bar.empty()
@@ -187,7 +212,7 @@ def analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, ke
         st.code(traceback.format_exc())
 
 
-def display_analysis_results(analysis_result, figures, danmaku_data):
+def display_analysis_results(analysis_result, figures, danmaku_data, ai_results=None):
     """显示分析结果"""
 
     st.markdown("---")
@@ -214,6 +239,58 @@ def display_analysis_results(analysis_result, figures, danmaku_data):
         with col4:
             avg_length = analysis_result.get('length_stats', {}).get('mean_length', 0)
             st.metric("平均长度", f"{avg_length:.1f}字")
+
+    # AI分析结果
+    if ai_results:
+        st.markdown("---")
+        st.subheader("🤖 AI智能分析")
+        
+        # 创建AI分析标签页
+        ai_tab1, ai_tab2, ai_tab3, ai_tab4 = st.tabs(["😊 AI情感分析", "🎯 主题分析", "🔥 热点解读", "📋 综合报告"])
+        
+        with ai_tab1:
+            if 'sentiment_ai' in ai_results and 'analysis' in ai_results['sentiment_ai']:
+                st.write("**AI情感分析结果:**")
+                st.write(ai_results['sentiment_ai']['analysis'])
+                if 'sample_count' in ai_results['sentiment_ai']:
+                    st.caption(f"基于 {ai_results['sentiment_ai']['sample_count']} 条弹幕样本分析")
+            elif 'sentiment_ai' in ai_results and 'error' in ai_results['sentiment_ai']:
+                st.error(f"情感分析失败: {ai_results['sentiment_ai']['error']}")
+            else:
+                st.info("暂无AI情感分析数据")
+        
+        with ai_tab2:
+            if 'themes_ai' in ai_results and 'analysis' in ai_results['themes_ai']:
+                st.write("**AI主题分析结果:**")
+                st.write(ai_results['themes_ai']['analysis'])
+                if 'sample_count' in ai_results['themes_ai']:
+                    st.caption(f"基于 {ai_results['themes_ai']['sample_count']} 条弹幕样本分析")
+            elif 'themes_ai' in ai_results and 'error' in ai_results['themes_ai']:
+                st.error(f"主题分析失败: {ai_results['themes_ai']['error']}")
+            else:
+                st.info("暂无AI主题分析数据")
+        
+        with ai_tab3:
+            if 'hot_moments_ai' in ai_results and 'analysis' in ai_results['hot_moments_ai']:
+                st.write("**AI热点时刻分析:**")
+                st.write(ai_results['hot_moments_ai']['analysis'])
+                if 'hot_moments_count' in ai_results['hot_moments_ai']:
+                    st.caption(f"基于 {ai_results['hot_moments_ai']['hot_moments_count']} 个热点时刻分析")
+            elif 'hot_moments_ai' in ai_results and 'error' in ai_results['hot_moments_ai']:
+                st.error(f"热点分析失败: {ai_results['hot_moments_ai']['error']}")
+            else:
+                st.info("暂无AI热点分析数据")
+        
+        with ai_tab4:
+            if 'comprehensive_ai' in ai_results and 'comprehensive_report' in ai_results['comprehensive_ai']:
+                st.write("**AI综合分析报告:**")
+                st.write(ai_results['comprehensive_ai']['comprehensive_report'])
+                if 'sample_count' in ai_results['comprehensive_ai']:
+                    st.caption(f"基于 {ai_results['comprehensive_ai']['sample_count']} 条弹幕样本分析")
+            elif 'comprehensive_ai' in ai_results and 'error' in ai_results['comprehensive_ai']:
+                st.error(f"综合分析失败: {ai_results['comprehensive_ai']['error']}")
+            else:
+                st.info("暂无AI综合分析数据")
 
     # 可视化图表
     if figures:

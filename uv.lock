@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 
 [[package]]
@@ -100,6 +100,7 @@ dependencies = [
     { name = "matplotlib" },
     { name = "pandas" },
     { name = "plotly" },
+    { name = "requests" },
     { name = "seaborn" },
     { name = "streamlit" },
     { name = "wordcloud" },
@@ -113,6 +114,7 @@ requires-dist = [
     { name = "matplotlib", specifier = ">=3.10.3" },
     { name = "pandas", specifier = ">=2.3.1" },
     { name = "plotly", specifier = ">=6.2.0" },
+    { name = "requests", specifier = ">=2.31.0" },
     { name = "seaborn", specifier = ">=0.13.2" },
     { name = "streamlit", specifier = ">=1.47.1" },
     { name = "wordcloud", specifier = ">=1.9.4" },
