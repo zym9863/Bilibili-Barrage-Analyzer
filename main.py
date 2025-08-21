@@ -8,12 +8,15 @@ import numpy as np
 from datetime import datetime, date
 import time
 import traceback
+from config import config
 
 # 导入自定义模块
 from danmaku_fetcher import DanmakuFetcher, fetch_danmaku, fetch_video_info
 from danmaku_analyzer import DanmakuAnalyzer, analyze_danmaku
 from danmaku_visualizer import DanmakuVisualizer, create_visualizations
 from danmaku_ai_analyzer import DanmakuAIAnalyzer, analyze_danmaku_with_ai
+from utils import progress_callback, data_cache
+from validator import validator
 
 
 def main():
@@ -70,11 +73,31 @@ def main():
                 help="只获取指定日期的弹幕，留空表示获取所有"
             )
 
-            keyword_count = st.slider("关键词数量", 10, 100, 30, help="显示的热门关键词数量")
-            time_interval = st.slider("时间间隔 (秒)", 10, 100, 60, help="时间分布分析的时间间隔")
+            ui_settings = config.ui_settings
+            keyword_count = st.slider(
+                "关键词数量", 
+                ui_settings['keyword_count_min'], 
+                ui_settings['keyword_count_max'], 
+                ui_settings['keyword_count_default'], 
+                help="显示的热门关键词数量"
+            )
+            time_interval = st.slider(
+                "时间间隔 (秒)", 
+                ui_settings['time_interval_min'], 
+                ui_settings['time_interval_max'], 
+                ui_settings['time_interval_default'], 
+                help="时间分布分析的时间间隔"
+            )
 
     # 主内容区域
     if video_input:
+        # 验证输入
+        try:
+            validated_input = validator.validate_bilibili_url(video_input)
+        except Exception as e:
+            st.error(f"❌ URL格式错误: {validator.sanitize_error_message(str(e))}")
+            return
+            
         # 获取视频信息
         with st.spinner("正在获取视频信息..."):
             try:

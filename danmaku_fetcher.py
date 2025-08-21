@@ -13,6 +13,7 @@ import pandas as pd
 
 from bilibili_api import video, ass, sync
 from bilibili_api.exceptions import *
+from config import config, NetworkException, ValidationException
 
 
 class DanmakuFetcher:
