@@ -94,8 +94,12 @@ def main():
         # 验证输入
         try:
             validated_input = validator.validate_bilibili_url(video_input)
-        except Exception as e:
-            st.error(f"❌ URL格式错误: {validator.sanitize_error_message(str(e))}")
+            # 验证分P号
+            validated_page = validator.validate_page_number(page_number)
+            # 验证分析参数
+            validated_time_interval, validated_keyword_count = validator.validate_analysis_parameters(time_interval, keyword_count)
+        except (ValueError, TypeError) as e:
+            st.error(f"❌ 输入验证失败: {validator.sanitize_error_message(str(e))}")
             return
             
         # 获取视频信息
@@ -105,7 +109,9 @@ def main():
 
                 if video_info:
                     # 显示视频信息
-                    col1, col2, col3 = st.columns([2, 1, 1])
+                    ui_config = config.ui_display_settings
+                    video_columns = ui_config.get('video_info_columns', [2, 1, 1])
+                    col1, col2, col3 = st.columns(video_columns)
 
                     with col1:
                         st.subheader("📹 视频信息")
@@ -126,11 +132,25 @@ def main():
 
                     # 开始分析按钮
                     if st.button("🚀 开始分析弹幕", type="primary", use_container_width=True):
-                        analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, keyword_count, time_interval, enable_ai_analysis)
+                        analyze_danmaku_data(
+                            validated_input['url'], 
+                            validated_page, 
+                            use_protobuf, 
+                            date_filter, 
+                            validated_keyword_count, 
+                            validated_time_interval, 
+                            enable_ai_analysis
+                        )
 
                 else:
                     st.error("❌ 无法获取视频信息，请检查URL或BV号是否正确")
 
+            except (ConnectionError, TimeoutError) as e:
+                st.error(f"❌ 网络连接问题: {str(e)}")
+                st.error("请检查网络连接或稍后重试")
+            except (ValueError, KeyError) as e:
+                st.error(f"❌ 数据解析错误: {str(e)}")
+                st.error("请检查URL或BV号是否正确")
             except Exception as e:
                 st.error(f"❌ 获取视频信息时出错: {str(e)}")
                 st.error("请检查网络连接或稍后重试")
@@ -163,70 +183,189 @@ def main():
             """)
 
 
-def analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, keyword_count, time_interval, enable_ai_analysis=False):
-    """分析弹幕数据"""
-
-    # 创建进度条
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
+def fetch_danmaku_data_step(video_input, page_number, use_protobuf, date_filter):
+    """
+    步骤1: 获取弹幕数据
+    
+    Args:
+        video_input: 视频输入
+        page_number: 分P号
+        use_protobuf: 是否使用protobuf
+        date_filter: 日期过滤器
+        
+    Returns:
+        List[Dict]: 弹幕数据列表，如果失败则返回None
+    """
     try:
-        # 步骤1: 获取弹幕数据
-        status_text.text("📥 正在获取弹幕数据...")
-        progress_bar.progress(20)
-
         danmaku_data = fetch_danmaku(
             video_input,
             page=page_number,
             use_protobuf=use_protobuf,
             date_filter=date_filter
         )
-
+        
         if not danmaku_data:
             st.error("❌ 未获取到弹幕数据，可能是视频没有弹幕或网络问题")
-            return
+            return None
+            
+        return danmaku_data
+        
+    except Exception as e:
+        st.error(f"❌ 获取弹幕数据失败: {str(e)}")
+        return None
 
-        progress_bar.progress(40)
+
+def analyze_danmaku_step(danmaku_data, time_interval):
+    """
+    步骤2: 分析弹幕数据
+    
+    Args:
+        danmaku_data: 弹幕数据
+        time_interval: 时间间隔
+        
+    Returns:
+        分析结果字典，如果失败则返回None
+    """
+    try:
+        analyzer = DanmakuAnalyzer()
+        analysis_result = analyzer.generate_summary_report(danmaku_data, time_interval)
+        return analysis_result
+        
+    except Exception as e:
+        st.error(f"❌ 弹幕数据分析失败: {str(e)}")
+        return None
+
+
+def perform_ai_analysis_step(analysis_result, danmaku_data, enable_ai_analysis):
+    """
+    步骤3: AI智能分析
+    
+    Args:
+        analysis_result: 基础分析结果
+        danmaku_data: 弹幕数据
+        enable_ai_analysis: 是否启用AI分析
+        
+    Returns:
+        AI分析结果，如果未启用或失败则返回None
+    """
+    if not enable_ai_analysis:
+        return None
+        
+    try:
+        danmaku_texts = [item['text'] for item in danmaku_data if item.get('text')]
+        ai_results = analyze_danmaku_with_ai(analysis_result, danmaku_texts)
+        return ai_results
+        
+    except (ConnectionError, TimeoutError) as e:
+        st.warning("⚠️ AI分析网络超时: 网络连接问题，请稍后重试")
+        return None
+    except (ValueError, KeyError) as e:
+        st.warning("⚠️ AI分析数据错误: 数据格式问题")
+        return None
+    except Exception as e:
+        st.warning(f"⚠️ AI分析失败: {str(e)}")
+        return None
+
+
+def generate_visualization_step(analysis_result):
+    """
+    步骤4: 生成可视化图表
+    
+    Args:
+        analysis_result: 分析结果
+        
+    Returns:
+        可视化图表字典，如果失败则返回None
+    """
+    try:
+        visualizer = DanmakuVisualizer()
+        figures = visualizer.create_dashboard(analysis_result)
+        return figures
+        
+    except Exception as e:
+        st.error(f"❌ 生成可视化图表失败: {str(e)}")
+        return None
+
+
+def analyze_danmaku_data(video_input, page_number, use_protobuf, date_filter, keyword_count, time_interval, enable_ai_analysis=False):
+    """
+    分析弹幕数据的主控制函数
+    
+    Args:
+        video_input: 视频输入
+        page_number: 分P号
+        use_protobuf: 是否使用protobuf接口
+        date_filter: 日期过滤器
+        keyword_count: 关键词数量
+        time_interval: 时间间隔
+        enable_ai_analysis: 是否启用AI分析
+    """
+    # 创建进度条和状态显示
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+    
+    # 获取UI显示配置
+    ui_config = config.ui_display_settings
+
+    try:
+        # 步骤1: 获取弹幕数据
+        status_text.text("📥 正在获取弹幕数据...")
+        progress_bar.progress(ui_config.get('progress_fetch_data', 20))
+        
+        danmaku_data = fetch_danmaku_data_step(video_input, page_number, use_protobuf, date_filter)
+        if danmaku_data is None:
+            return
+            
+        progress_bar.progress(ui_config.get('progress_analyze_data', 40))
 
         # 步骤2: 分析数据
         status_text.text("🔍 正在分析弹幕数据...")
-
-        analyzer = DanmakuAnalyzer()
-        analysis_result = analyzer.generate_summary_report(danmaku_data, time_interval)
-
-        progress_bar.progress(60)
+        
+        analysis_result = analyze_danmaku_step(danmaku_data, time_interval)
+        if analysis_result is None:
+            return
+            
+        progress_bar.progress(ui_config.get('progress_ai_analysis', 60))
 
         # 步骤3: AI分析（如果启用）
-        ai_results = None
         if enable_ai_analysis:
             status_text.text("🤖 正在进行AI智能分析...")
-            try:
-                danmaku_texts = [item['text'] for item in danmaku_data if item.get('text')]
-                ai_results = analyze_danmaku_with_ai(analysis_result, danmaku_texts)
-                progress_bar.progress(80)
-            except Exception as e:
-                st.warning(f"⚠️ AI分析失败: {str(e)}")
-                ai_results = None
-                progress_bar.progress(80)
-        else:
-            progress_bar.progress(80)
+            
+        ai_results = perform_ai_analysis_step(analysis_result, danmaku_data, enable_ai_analysis)
+        progress_bar.progress(ui_config.get('progress_visualization', 80))
 
         # 步骤4: 生成可视化
         status_text.text("📊 正在生成可视化图表...")
+        
+        figures = generate_visualization_step(analysis_result)
+        if figures is None:
+            return
 
-        visualizer = DanmakuVisualizer()
-        figures = visualizer.create_dashboard(analysis_result)
-
-        progress_bar.progress(100)
+        progress_bar.progress(ui_config.get('progress_complete', 100))
         status_text.text("✅ 分析完成!")
 
-        time.sleep(1)
+        time.sleep(ui_config.get('progress_complete_delay', 1))
         progress_bar.empty()
         status_text.empty()
 
         # 显示分析结果
         display_analysis_results(analysis_result, figures, danmaku_data, ai_results)
 
+    except (ConnectionError, TimeoutError) as e:
+        progress_bar.empty()
+        status_text.empty()
+        st.error("❌ 网络连接超时，请检查网络连接或稍后重试")
+        st.error(f"详细信息: {str(e)}")
+    except (ValueError, KeyError) as e:
+        progress_bar.empty()
+        status_text.empty()
+        st.error("❌ 数据处理错误，请检查输入或稍后重试")
+        st.error(f"详细信息: {str(e)}")
+    except MemoryError as e:
+        progress_bar.empty()
+        status_text.empty()
+        st.error("❌ 内存不足，请尝试分析更小的视频或重启应用")
+        st.error("建议: 选择较短的视频或关闭其他应用释放内存")
     except Exception as e:
         progress_bar.empty()
         status_text.empty()
@@ -244,8 +383,10 @@ def display_analysis_results(analysis_result, figures, danmaku_data, ai_results=
     # 基本统计
     if 'basic_stats' in analysis_result:
         st.subheader("📈 基本统计")
-
-        col1, col2, col3, col4 = st.columns(4)
+        
+        ui_config = config.ui_display_settings
+        stats_columns_count = ui_config.get('stats_columns_count', 4)
+        col1, col2, col3, col4 = st.columns(stats_columns_count)
 
         stats = analysis_result['basic_stats']
 
@@ -365,10 +506,15 @@ def display_analysis_results(analysis_result, figures, danmaku_data, ai_results=
         # 热点时刻详情
         if 'hot_moments' in analysis_result and analysis_result['hot_moments']:
             st.subheader("🔥 热点时刻详情")
+            
+            ui_config = config.ui_display_settings
+            hot_moments_limit = ui_config.get('hot_moments_display_limit', 5)
+            sample_limit = ui_config.get('sample_danmaku_display_limit', 3)
+            detail_columns = ui_config.get('hot_moment_detail_columns', [1, 3])
 
-            for i, moment in enumerate(analysis_result['hot_moments'][:5], 1):
+            for i, moment in enumerate(analysis_result['hot_moments'][:hot_moments_limit], 1):
                 with st.container():
-                    col1, col2 = st.columns([1, 3])
+                    col1, col2 = st.columns(detail_columns)
 
                     with col1:
                         st.write(f"**#{i}**")
@@ -377,7 +523,7 @@ def display_analysis_results(analysis_result, figures, danmaku_data, ai_results=
 
                     with col2:
                         st.write("**样本弹幕:**")
-                        for j, text in enumerate(moment['sample_danmaku'][:3], 1):
+                        for j, text in enumerate(moment['sample_danmaku'][:sample_limit], 1):
                             st.write(f"{j}. {text}")
 
                     st.markdown("---")
@@ -388,10 +534,13 @@ def display_analysis_results(analysis_result, figures, danmaku_data, ai_results=
 
             # 转换为DataFrame
             df = pd.DataFrame(danmaku_data)
+            
+            ui_config = config.ui_display_settings
+            preview_rows = ui_config.get('dataframe_preview_rows', 10)
 
             # 显示数据预览
             st.write("**数据预览:**")
-            st.dataframe(df.head(10), use_container_width=True)
+            st.dataframe(df.head(preview_rows), use_container_width=True)
 
             # 下载按钮
             csv = df.to_csv(index=False, encoding='utf-8-sig')
@@ -404,25 +553,49 @@ def display_analysis_results(analysis_result, figures, danmaku_data, ai_results=
 
 
 def format_duration(seconds):
-    """格式化时长显示"""
-    if seconds < 60:
+    """
+    格式化时长显示
+    
+    Args:
+        seconds: 秒数
+        
+    Returns:
+        str: 格式化后的时长字符串
+    """
+    ui_config = config.ui_display_settings
+    hour_threshold = ui_config.get('time_format_hour_threshold', 3600)
+    minute_threshold = ui_config.get('time_format_minute_threshold', 60)
+    
+    if seconds < minute_threshold:
         return f"{seconds}秒"
-    elif seconds < 3600:
-        minutes = seconds // 60
-        secs = seconds % 60
+    elif seconds < hour_threshold:
+        minutes = seconds // minute_threshold
+        secs = seconds % minute_threshold
         return f"{minutes}分{secs}秒"
     else:
-        hours = seconds // 3600
-        minutes = (seconds % 3600) // 60
+        hours = seconds // hour_threshold
+        minutes = (seconds % hour_threshold) // minute_threshold
         return f"{hours}小时{minutes}分钟"
 
 
 def format_number(num):
-    """格式化数字显示"""
-    if num >= 100000000:  # 1亿
-        return f"{num/100000000:.1f}亿"
-    elif num >= 10000:  # 1万
-        return f"{num/10000:.1f}万"
+    """
+    格式化数字显示
+    
+    Args:
+        num: 要格式化的数字
+        
+    Returns:
+        str: 格式化后的字符串
+    """
+    ui_config = config.ui_display_settings
+    billion_threshold = ui_config.get('number_format_billion_threshold', 100000000)
+    wan_threshold = ui_config.get('number_format_wan_threshold', 10000)
+    
+    if num >= billion_threshold:  # 1亿
+        return f"{num/billion_threshold:.1f}亿"
+    elif num >= wan_threshold:  # 1万
+        return f"{num/wan_threshold:.1f}万"
     else:
         return str(num)
 

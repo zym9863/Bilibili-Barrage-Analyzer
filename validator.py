@@ -37,19 +37,51 @@ class InputValidator:
         if len(url) > 2000:
             raise ValidationException("URL长度过长", error_code="URL_TOO_LONG")
         
+        if len(url) < 10:
+            raise ValidationException("URL长度过短", error_code="URL_TOO_SHORT")
+        
         # 检查是否包含危险字符
-        dangerous_chars = ['<', '>', '"', "'", '&', '\n', '\r', '\t']
+        dangerous_chars = ['<', '>', '"', "'", '&', '\n', '\r', '\t', '|', '`']
         if any(char in url for char in dangerous_chars):
             raise ValidationException("URL包含非法字符", error_code="INVALID_CHARACTERS")
+        
+        # 检查是否包含SQL注入或XSS攻击模式
+        malicious_patterns = [
+            r'union\s+select',
+            r'drop\s+table',
+            r'<script',
+            r'javascript:',
+            r'eval\s*\(',
+            r'expression\s*\(',
+            r'on\w+\s*='
+        ]
+        
+        for pattern in malicious_patterns:
+            if re.search(pattern, url, re.IGNORECASE):
+                raise ValidationException("URL包含可疑内容", error_code="SUSPICIOUS_CONTENT")
         
         try:
             parsed = urlparse(url)
         except Exception as e:
             raise ValidationException(f"URL格式错误: {e}", error_code="INVALID_FORMAT")
         
-        # 检查是否是有效的HTTP(S) URL
-        if parsed.scheme not in ['http', 'https']:
+        # 检查是否是有效的HTTP(S) URL或BV号直接输入
+        if parsed.scheme and parsed.scheme not in ['http', 'https']:
             raise ValidationException("URL必须以http://或https://开头", error_code="INVALID_SCHEME")
+        
+        # 如果是直接的BV号输入，跳过域名验证
+        if url.startswith('BV'):
+            bv_match = re.match(r'^BV[A-Za-z0-9]{10}$', url)
+            if not bv_match:
+                raise ValidationException("BV号格式不正确", error_code="INVALID_BV_FORMAT")
+            
+            return {
+                'url': url,
+                'domain': None,
+                'bvid': url,
+                'avid': None,
+                'is_direct_bv': True
+            }
         
         # 检查是否是B站域名
         valid_domains = [
@@ -62,15 +94,20 @@ class InputValidator:
         if not any(parsed.netloc.endswith(domain) for domain in valid_domains):
             raise ValidationException("只支持B站视频链接", error_code="INVALID_DOMAIN")
         
+        # 检查端口号（如果有的话）
+        if parsed.port and parsed.port not in [80, 443]:
+            raise ValidationException("URL端口号不正确", error_code="INVALID_PORT")
+        
         # 提取BV号或AV号
-        bv_match = re.search(r'BV[A-Za-z0-9]+', url)
+        bv_match = re.search(r'BV[A-Za-z0-9]{10}', url)
         av_match = re.search(r'av(\d+)', url)
         
         result = {
             'url': url,
             'domain': parsed.netloc,
             'bvid': bv_match.group() if bv_match else None,
-            'avid': av_match.group(1) if av_match else None
+            'avid': av_match.group(1) if av_match else None,
+            'is_direct_bv': False
         }
         
         if not result['bvid'] and not result['avid']:
@@ -207,6 +244,111 @@ class InputValidator:
                 )
         
         return text
+    
+    @staticmethod
+    def validate_page_number(page_num: Any) -> int:
+        """
+        验证分P号输入
+        
+        Args:
+            page_num: 分P号输入
+            
+        Returns:
+            验证后的分P号
+            
+        Raises:
+            ValidationException: 分P号格式不正确
+        """
+        try:
+            page_int = int(page_num)
+        except (ValueError, TypeError):
+            raise ValidationException("分P号必须是整数", error_code="INVALID_PAGE_NUMBER")
+        
+        if page_int < 0:
+            raise ValidationException("分P号不能为负数", error_code="NEGATIVE_PAGE_NUMBER")
+        
+        if page_int > 999:  # 合理的上限
+            raise ValidationException("分P号过大", error_code="PAGE_NUMBER_TOO_LARGE")
+        
+        return page_int
+    
+    @staticmethod
+    def validate_analysis_parameters(time_interval: Any, keyword_count: Any) -> tuple:
+        """
+        验证分析参数
+        
+        Args:
+            time_interval: 时间间隔
+            keyword_count: 关键词数量
+            
+        Returns:
+            验证后的参数元组 (time_interval, keyword_count)
+            
+        Raises:
+            ValidationException: 参数不正确
+        """
+        # 验证时间间隔
+        validated_interval = InputValidator.validate_number_input(
+            time_interval, 
+            min_val=1, 
+            max_val=3600, 
+            field_name="时间间隔"
+        )
+        
+        # 验证关键词数量
+        validated_count = InputValidator.validate_number_input(
+            keyword_count, 
+            min_val=1, 
+            max_val=200, 
+            field_name="关键词数量"
+        )
+        
+        return int(validated_interval), int(validated_count)
+    
+    @staticmethod
+    def validate_file_path(file_path: str, allowed_extensions: list = None) -> str:
+        """
+        验证文件路径
+        
+        Args:
+            file_path: 文件路径
+            allowed_extensions: 允许的文件扩展名列表
+            
+        Returns:
+            验证后的文件路径
+            
+        Raises:
+            ValidationException: 文件路径不正确
+        """
+        if not file_path or not isinstance(file_path, str):
+            raise ValidationException("文件路径不能为空", error_code="EMPTY_FILE_PATH")
+        
+        file_path = file_path.strip()
+        
+        # 检查路径长度
+        if len(file_path) > 260:  # Windows路径长度限制
+            raise ValidationException("文件路径过长", error_code="PATH_TOO_LONG")
+        
+        # 检查是否包含危险字符
+        dangerous_chars = ['<', '>', '"', '|', '*', '?']
+        if any(char in file_path for char in dangerous_chars):
+            raise ValidationException("文件路径包含非法字符", error_code="INVALID_PATH_CHARACTERS")
+        
+        # 检查路径遍历攻击
+        if '..' in file_path or file_path.startswith('/') or ':' in file_path[1:]:
+            raise ValidationException("文件路径格式不正确", error_code="INVALID_PATH_FORMAT")
+        
+        # 检查文件扩展名
+        if allowed_extensions:
+            import os
+            _, ext = os.path.splitext(file_path)
+            if ext.lower() not in [e.lower() for e in allowed_extensions]:
+                raise ValidationException(
+                    f"只允许以下文件类型: {', '.join(allowed_extensions)}", 
+                    error_code="INVALID_FILE_EXTENSION"
+                )
+        
+        return file_path
     
     @staticmethod
     def sanitize_error_message(error_msg: str) -> str:

@@ -76,7 +76,8 @@ class DanmakuVisualizer:
                 if os.path.exists(path):
                     font_path = path
                     break
-            except:
+            except (ImportError, OSError) as e:
+                # 处理导入错误或文件系统访问错误
                 continue
         
         # 创建词云参数
